@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+:root {
+  /* System Base - Deep blacks and slate grays */
+  --background: #050505;
+  --foreground: #e0e0e0;
+  
+  --panel-bg: rgba(2, 6, 23, 0.6); /* bg-slate-950/60 */
+  --panel-border: rgba(6, 182, 212, 0.2); /* cyan-500/20 */
+
+  /* Solo Leveling Glowing Neon Accents */
+  --neon-blue: #00e5ff;
+  --neon-blue-glow: 0 0 10px rgba(0, 229, 255, 0.6), 0 0 20px rgba(0, 229, 255, 0.4);
+  
+  --neon-purple: #9d00ff;
+  --neon-purple-glow: 0 0 10px rgba(157, 0, 255, 0.6), 0 0 20px rgba(157, 0, 255, 0.4);
+  
+  /* Status Colors */
+  --sys-success: #00ff88;
+  --sys-warning: #ffcc00;
+  --sys-danger: #ff0033;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-orbitron: var(--font-orbitron);
+  
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-border: var(--panel-border);
+  
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-purple: var(--neon-purple);
+  
+  --color-sys-success: var(--sys-success);
+  --color-sys-warning: var(--sys-warning);
+  --color-sys-danger: var(--sys-danger);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Base UI Effects */
+.system-panel {
+  background-color: var(--panel-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+}
+
+.text-glow-blue {
+  text-shadow: var(--neon-blue-glow);
+  color: var(--neon-blue);
+}
+
+.text-glow-purple {
+  text-shadow: var(--neon-purple-glow);
+  color: var(--neon-purple);
+}
+
+.box-glow-blue {
+  box-shadow: var(--neon-blue-glow);
+}
+
+.box-glow-purple {
+  box-shadow: var(--neon-purple-glow);
+}
+
+/* Shimmer gradient effect for progress bars */
+.progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: shimmer 2s infinite linear;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Urgency Color System ───────────────────────────────────────────────────
+   Driven by data-urgency on <html>, set by DailyTimerContext.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.system-panel, .text-glow-blue, .box-glow-blue {
+  transition: border-color 2s ease, box-shadow 2s ease, color 2s ease;
+}
+
+/* Warning: < 3 hours */
+html[data-urgency="warning"] {
+  --neon-blue: #cc2200;
+  --neon-blue-glow: 0 0 10px rgba(204,34,0,0.7), 0 0 20px rgba(204,34,0,0.4);
+  --panel-border: rgba(204, 34, 0, 0.25);
+}
+
+/* Critical: < 1 hour */
+html[data-urgency="critical"] {
+  --neon-blue: #ff1a00;
+  --neon-blue-glow: 0 0 12px rgba(255,26,0,0.9), 0 0 30px rgba(255,26,0,0.5);
+  --panel-border: rgba(255, 26, 0, 0.35);
+}
+
+html[data-urgency="critical"] .system-panel {
+  animation: urgencyPanelPulse 2s ease-in-out infinite;
+}
+
+/* Lockdown */
+html[data-urgency="lockdown"] {
+  --neon-blue: #ff0000;
+  --panel-border: rgba(255, 0, 0, 0.5);
+}
+
+@keyframes urgencyPanelPulse {
+  0%,100% { box-shadow: 0 4px 30px rgba(0,0,0,0.5); }
+  50%     { box-shadow: 0 0 25px rgba(255,26,0,0.25); }
+}
+/* Glowing pulse effect for interactive elements */
+.hover-pulse-glow {
+  transition: box-shadow 0.3s ease;
+}
+
+.hover-pulse-glow:hover {
+  animation: glow-pulse 1.5s infinite alternate;
+}
+
+@keyframes glow-pulse {
+  0% {
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(0, 229, 255, 0.8);
+  }
+}

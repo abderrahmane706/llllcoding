@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+enum Rank {
+  F
+  E
+  D
+  C
+  B
+  A
+  S
+  SS
+  SSS
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  password         String?
+  name             String?
+  totalExp         Int       @default(0)
+  level            Int       @default(1)
+  rank             Rank      @default(F)
+  lastDailyReset   DateTime?
+  dailiesCompleted Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  missions  Mission[]
+  progress  ProgressLog[]
+}
+
+enum MissionType {
+  STANDARD
+  USER_GENERATED
+}
+
+enum MissionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model Mission {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  expReward   Int
+  type        MissionType   @default(USER_GENERATED)
+  status      MissionStatus @default(PENDING)
+  category    String?       @default("general")
+  prayerIndex Int?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProgressLog {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  expGained Int      // Can be negative for penalties
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
