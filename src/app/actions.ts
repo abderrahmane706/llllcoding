@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { MissionStatus, MissionType } from "@prisma/client";
 import { getRankFromExp, getLevelFromExp } from "@/lib/ranks";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { checkAndMarkDailiesComplete } from "@/lib/penalty";
 
@@ -18,10 +17,12 @@ const addMissionSchema = z.object({
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 async function requireAuth() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) throw new Error("Unauthorized");
-  return session.user.id;
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new Error("Unauthorized");
+  return user.id;
 }
+
 
 // ── Complete a mission ───────────────────────────────────────────────────────
 export async function completeMission(missionId: string) {

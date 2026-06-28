@@ -1,27 +1,30 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ authenticated: false });
+export const dynamic = "force-dynamic";
 
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
+export async function GET() {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  if (error || !user) return NextResponse.json({ authenticated: false });
+
+  const dbUser = await db.user.findUnique({
+    where: { id: user.id },
     select: { lastDailyReset: true, dailiesCompleted: true },
   });
-  if (!user) return NextResponse.json({ authenticated: false });
+  if (!dbUser) return NextResponse.json({ authenticated: false });
 
   const [total, done] = await Promise.all([
-    db.mission.count({ where: { userId: session.user.id, type: "STANDARD" } }),
-    db.mission.count({ where: { userId: session.user.id, type: "STANDARD", status: "COMPLETED" } }),
+    db.mission.count({ where: { userId: user.id, type: "STANDARD" } }),
+    db.mission.count({ where: { userId: user.id, type: "STANDARD", status: "COMPLETED" } }),
   ]);
 
   return NextResponse.json({
     authenticated: true,
-    lastDailyReset: user.lastDailyReset?.toISOString() ?? null,
-    dailiesCompleted: user.dailiesCompleted || (total > 0 && done === total),
+    lastDailyReset: dbUser.lastDailyReset?.toISOString() ?? null,
+    dailiesCompleted: dbUser.dailiesCompleted || (total > 0 && done === total),
     completedCount: done,
     totalCount: total,
   });
