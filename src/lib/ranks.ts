@@ -16,7 +16,7 @@ export const RANK_THRESHOLDS: { rank: Rank; minExp: number; label: string; color
 ];
 
 export function getRankFromExp(totalExp: number): Rank {
-  let rank = Rank.F;
+  let rank: Rank = Rank.F;
   for (const t of RANK_THRESHOLDS) {
     if (totalExp >= t.minExp) rank = t.rank;
     else break;
