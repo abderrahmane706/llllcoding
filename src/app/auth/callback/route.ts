@@ -1,45 +1,85 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 /**
- * OAuth Callback Handler
- * Supabase redirects here after Google OAuth completes.
- * Exchanges the one-time `code` for a session stored in HttpOnly cookies.
+ * OAuth Callback Handler — production-safe implementation.
  *
- * Production-safe origin resolution:
- * On Vercel (and most reverse proxies), request.url uses an internal address.
- * We derive the true public origin from the x-forwarded-host / host headers
- * to guarantee the redirect uses the real https:// domain in production.
+ * Why this file uses createServerClient directly (not our createClient() wrapper):
+ * After exchangeCodeForSession(), Supabase needs to write the session tokens as
+ * cookies on the HTTP *response*, not just the request cookie store.
+ * Our shared createClient() helper targets Server Components where cookie writes
+ * are silently discarded. Here we need a NextResponse-aware cookie handler so
+ * the session is actually persisted to the browser.
+ *
+ * Origin resolution:
+ * On Vercel, request.url resolves to an internal container address.
+ * We derive the true public origin from x-forwarded-host so the final redirect
+ * uses https://shinkatrack-rho.vercel.app instead of http://0.0.0.0:3000.
  */
 export async function GET(request: Request) {
-  const requestUrl  = new URL(request.url);
-  const code        = requestUrl.searchParams.get("code");
-  const next        = requestUrl.searchParams.get("next") ?? "/";
+  const requestUrl    = new URL(request.url);
+  const code          = requestUrl.searchParams.get("code");
+  const next          = requestUrl.searchParams.get("next") ?? "/";
 
-  // ── Production-safe origin ─────────────────────────────────────────────────
-  // Vercel sets x-forwarded-host to the public hostname (e.g. your-app.vercel.app).
-  // Fall back to requestUrl.origin for local development.
+  // ── Production-safe public origin ─────────────────────────────────────────
   const forwardedHost  = request.headers.get("x-forwarded-host");
   const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = forwardedHost
-    ? `${forwardedProto}://${forwardedHost}`
-    : requestUrl.origin;
+    ? `${forwardedProto}://${forwardedHost}`   // → https://shinkatrack-rho.vercel.app
+    : requestUrl.origin;                        // → http://localhost:3000 (local dev)
   // ───────────────────────────────────────────────────────────────────────────
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (!error) {
-      // Redirect to the originally requested path (or homepage).
-      // getPlayerProfile() in data.ts will auto-create the Prisma user row
-      // on first load if this is a brand-new Google OAuth user.
-      return NextResponse.redirect(`${origin}${next}`);
-    }
+  // Guard: if there is no code, nothing to exchange
+  if (!code) {
+    console.warn("[auth/callback] No code param received — aborting.");
+    return NextResponse.redirect(`${origin}/login?error=no_code`);
   }
 
-  // Code exchange failed — redirect back to login with error flag.
-  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  // Validate env vars are present before attempting client creation
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("[auth/callback] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY env vars.");
+    return NextResponse.redirect(`${origin}/login?error=server-config`);
+  }
+
+  try {
+    // Build a NextResponse so we can attach the session cookies to the reply
+    const response = NextResponse.redirect(`${origin}${next}`);
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          // Write session tokens to BOTH the cookie store (server-side reads)
+          // and the response headers (so the browser actually stores them).
+          cookiesToSet.forEach(({ name, value, options }) => {
+            try { cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2]); } catch { /* ignore */ }
+            response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+          });
+        },
+      },
+    });
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      console.error("[auth/callback] exchangeCodeForSession error:", error.message);
+      return NextResponse.redirect(`${origin}/login?error=session_exchange_failed`);
+    }
+
+    // ✅ Session stored — redirect to app
+    return response;
+
+  } catch (err) {
+    // Catch any unexpected server crash and redirect gracefully
+    console.error("[auth/callback] Unexpected server error:", err);
+    return NextResponse.redirect(`${origin}/login?error=server-crash`);
+  }
 }
