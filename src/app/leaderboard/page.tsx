@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { RANK_THRESHOLDS } from "@/lib/ranks";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Leaderboard — Solo Leveling Tracker",
   description: "The global ranking of all hunters, sorted by level and EXP.",
