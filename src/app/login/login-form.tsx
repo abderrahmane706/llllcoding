@@ -48,6 +48,19 @@ export default function LoginForm() {
 
   async function handleGoogle() {
     setLoading(true);
+
+    // ── DIAGNOSTIC: log the resolved Supabase URL ─────────────────────────────
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    console.log("DIAGNOSTIC: Supabase URL Client Config is:", supabaseUrl);
+    if (!supabaseUrl || supabaseUrl.includes("xxxx")) {
+      const msg = `❌ NEXT_PUBLIC_SUPABASE_URL is invalid: "${supabaseUrl}". Check .env.local and restart the dev server.`;
+      console.error(msg);
+      setMessage({ text: "Configuration error — check browser console.", ok: false });
+      setLoading(false);
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
