@@ -50,7 +50,6 @@ export default function LoginForm() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (error) {
       setMessage({ text: error.message, ok: false });
