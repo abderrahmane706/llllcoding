@@ -2,18 +2,9 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
 
-// Session-mode pooler (port 5432) — used for migrations and db push
+// Session-mode pooler (port 5432) — used for Prisma CLI (migrations, db push, studio)
 const sessionUrl = process.env["DIRECT_URL"]!;
-
-const pool = new Pool({
-  connectionString: sessionUrl,
-  ssl: { rejectUnauthorized: false },
-});
-
-const adapter = new PrismaPg(pool);
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -22,6 +13,5 @@ export default defineConfig({
   },
   datasource: {
     url: sessionUrl,
-    adapter,
   },
 });

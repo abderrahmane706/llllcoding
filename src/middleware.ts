@@ -10,7 +10,10 @@ const MAX_REQUESTS = 10; // Max 10 requests per minute for APIs
 export function middleware(request: NextRequest) {
   // Only apply rate limiting to the authentication and API routes
   if (request.nextUrl.pathname.startsWith("/api/")) {
-    const ip = request.ip ?? request.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const ip =
+      request.headers.get("x-real-ip") ??
+      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+      "127.0.0.1";
     const now = Date.now();
     
     const record = rateLimitMap.get(ip);
