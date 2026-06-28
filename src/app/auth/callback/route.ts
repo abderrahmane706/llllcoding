@@ -1,54 +1,44 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-/**
- * OAuth Callback Handler — production-safe implementation.
- *
- * Why this file uses createServerClient directly (not our createClient() wrapper):
- * After exchangeCodeForSession(), Supabase needs to write the session tokens as
- * cookies on the HTTP *response*, not just the request cookie store.
- * Our shared createClient() helper targets Server Components where cookie writes
- * are silently discarded. Here we need a NextResponse-aware cookie handler so
- * the session is actually persisted to the browser.
- *
- * Origin resolution:
- * On Vercel, request.url resolves to an internal container address.
- * We derive the true public origin from x-forwarded-host so the final redirect
- * uses https://shinkatrack-rho.vercel.app instead of http://0.0.0.0:3000.
- */
+// Hardcoded production origin — reliable fallback if forwarded headers are absent
+const PRODUCTION_ORIGIN = "https://shinkatrack-rho.vercel.app";
+
 export async function GET(request: Request) {
-  const requestUrl    = new URL(request.url);
-  const code          = requestUrl.searchParams.get("code");
-  const next          = requestUrl.searchParams.get("next") ?? "/";
-
-  // ── Production-safe public origin ─────────────────────────────────────────
-  const forwardedHost  = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
-  const origin = forwardedHost
-    ? `${forwardedProto}://${forwardedHost}`   // → https://shinkatrack-rho.vercel.app
-    : requestUrl.origin;                        // → http://localhost:3000 (local dev)
-  // ───────────────────────────────────────────────────────────────────────────
-
-  // Guard: if there is no code, nothing to exchange
-  if (!code) {
-    console.warn("[auth/callback] No code param received — aborting.");
-    return NextResponse.redirect(`${origin}/login?error=no_code`);
-  }
-
-  // Validate env vars are present before attempting client creation
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("[auth/callback] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY env vars.");
-    return NextResponse.redirect(`${origin}/login?error=server-config`);
-  }
-
   try {
-    // Build a NextResponse so we can attach the session cookies to the reply
-    const response = NextResponse.redirect(`${origin}${next}`);
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get("code");
+    const next = searchParams.get("next") ?? "/";
+
+    // Derive the active origin dynamically so local dev still works.
+    // Falls back to the hardcoded production domain if headers are missing.
+    const forwardedHost  = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+    const origin = forwardedHost
+      ? `${forwardedProto}://${forwardedHost}`
+      : (process.env.NODE_ENV === "production" ? PRODUCTION_ORIGIN : new URL(request.url).origin);
+
+    if (!code) {
+      console.warn("[auth/callback] No code param — redirecting to login.");
+      return NextResponse.redirect(`${origin}/login?error=no_code`);
+    }
+
+    // Guard: fail fast if env vars are missing rather than throwing a cryptic 500
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("[auth/callback] Missing Supabase env vars.");
+      return NextResponse.redirect(`${PRODUCTION_ORIGIN}/?error=server_config`);
+    }
+
+    // Build the success redirect response BEFORE we create the supabase client
+    // so we can attach the session cookies directly to it.
+    const successResponse = NextResponse.redirect(`${origin}${next}`);
+
+    // @supabase/ssr v0.6.x uses getAll / setAll (NOT get/set/remove)
     const cookieStore = await cookies();
 
     const supabase = createServerClient(supabaseUrl, supabaseKey, {
@@ -57,11 +47,18 @@ export async function GET(request: Request) {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          // Write session tokens to BOTH the cookie store (server-side reads)
-          // and the response headers (so the browser actually stores them).
           cookiesToSet.forEach(({ name, value, options }) => {
-            try { cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2]); } catch { /* ignore */ }
-            response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+            // Write to cookieStore so server-side reads in this request work
+            try {
+              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2]);
+            } catch { /* read-only context — ignore */ }
+
+            // Write to the response so the browser actually stores the tokens
+            successResponse.cookies.set(
+              name,
+              value,
+              options as Parameters<typeof successResponse.cookies.set>[2]
+            );
           });
         },
       },
@@ -74,12 +71,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?error=session_exchange_failed`);
     }
 
-    // ✅ Session stored — redirect to app
-    return response;
+    // ✅ Session persisted to cookies — send the user into the app
+    return successResponse;
 
-  } catch (err) {
-    // Catch any unexpected server crash and redirect gracefully
-    console.error("[auth/callback] Unexpected server error:", err);
-    return NextResponse.redirect(`${origin}/login?error=server-crash`);
+  } catch (globalError) {
+    // Safety net: never let this route throw a raw 500 — always redirect gracefully
+    console.error("[auth/callback] Fatal exception:", globalError);
+    return NextResponse.redirect(`${PRODUCTION_ORIGIN}/?error=server_exception`);
   }
 }
