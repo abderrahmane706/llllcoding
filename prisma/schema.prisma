@@ -26,6 +26,8 @@ model User {
   email            String    @unique
   password         String?
   name             String?
+  bio              String?
+  avatarUrl        String?
   totalExp         Int       @default(0)
   level            Int       @default(1)
   rank             Rank      @default(F)

@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/quests",      label: "Quests", icon: "⚔" },
   { href: "/status",      label: "Status", icon: "◈" },
   { href: "/leaderboard", label: "Ranks",  icon: "⬡" },
+  { href: "/settings",    label: "Config", icon: "⚙" },
 ];
 
 export default function NavBar() {

@@ -7,7 +7,7 @@ const RATE_LIMIT_WINDOW = 60_000; // 1 minute
 const MAX_REQUESTS = 20;
 
 // ── Protected routes ──────────────────────────────────────────────────────────
-const PROTECTED = ["/dashboard", "/quests", "/status", "/leaderboard", "/api/"];
+const PROTECTED = ["/dashboard", "/quests", "/status", "/leaderboard", "/settings", "/api/"];
 const PUBLIC    = ["/login", "/auth/", "/_next/", "/favicon"];
 
 export async function middleware(request: NextRequest) {
