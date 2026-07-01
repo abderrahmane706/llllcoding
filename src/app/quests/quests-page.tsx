@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useOptimistic, useRef, useEffect } from "react";
-import { completeMission, resetMission, addMission, deleteMission } from "@/app/actions";
+import { completeMission, resetMission, addMission, deleteMission, extendMission } from "@/app/actions";
 import { useSound } from "@/lib/useSound";
 import SystemAlert from "@/components/SystemAlert";
 
@@ -11,6 +11,7 @@ type Mission = {
   expReward: number; status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   type: "STANDARD" | "USER_GENERATED";
   category: string | null; prayerIndex: number | null;
+  expiresAt: Date | null; isCustom: boolean;
 };
 
 type User = { id: string; name: string | null; level: number; rank: string; totalExp: number };
@@ -44,15 +45,41 @@ function useParticleBurst() {
 
 // ── Single Mission Card ───────────────────────────────────────────────────────
 function MissionCard({
-  mission, userId, isPending, onComplete, onReset, onDelete,
+  mission, userId, isPending, onComplete, onReset, onDelete, onExtend
 }: {
   mission: Mission; userId: string; isPending: boolean;
   onComplete: (id: string) => void; onReset: (id: string) => void; onDelete: (id: string) => void;
+  onExtend?: (id: string, hours: number) => void;
 }) {
   const { ref, burst } = useParticleBurst();
   const [justCompleted, setJustCompleted] = useState(false);
   const isCompleted = mission.status === "COMPLETED";
-  const isCustom    = mission.type === "USER_GENERATED";
+  const isCustom    = mission.isCustom || mission.type === "USER_GENERATED";
+
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [isUrgent, setIsUrgent] = useState(false);
+
+  useEffect(() => {
+    if (!mission.expiresAt || isCompleted) return;
+    const expiry = new Date(mission.expiresAt).getTime();
+    
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = expiry - now;
+      if (diff <= 0) {
+        setTimeLeft("00h 00m 00s (Expired)");
+        setIsUrgent(true);
+        clearInterval(interval);
+      } else {
+        const h = Math.floor(diff / (1000 * 60 * 60));
+        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${h}h ${m}m ${s}s`);
+        setIsUrgent(h < 6); // Urgent if less than 6 hours
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [mission.expiresAt, isCompleted]);
 
   function handleComplete() {
     burst();
@@ -113,6 +140,11 @@ function MissionCard({
             {mission.description && (
               <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{mission.description}</p>
             )}
+            {timeLeft && !isCompleted && (
+              <p className={`text-[10px] font-orbitron mt-1 ${isUrgent ? "text-red-500 animate-pulse" : "text-gray-400"}`}>
+                ⏳ {timeLeft}
+              </p>
+            )}
           </div>
         </div>
 
@@ -145,6 +177,18 @@ function MissionCard({
               }`}
             >
               Done
+            </button>
+          )}
+          )}
+
+          {isCustom && !isCompleted && onExtend && (
+            <button
+              onClick={() => onExtend(mission.id, 1)}
+              disabled={isPending}
+              className="text-[10px] px-2 py-1.5 rounded border border-purple-800/40 text-purple-400 hover:bg-purple-900/40 transition-all disabled:opacity-40 uppercase font-orbitron"
+              title="Extend Time (+1h)"
+            >
+              +1H
             </button>
           )}
 
@@ -455,6 +499,12 @@ export default function QuestsPage({ user, missions }: { user: User; missions: M
     });
   }
 
+  function handleExtend(id: string, hours: number) {
+    startTransition(async () => {
+      await extendMission(id, hours);
+    });
+  }
+
   return (
     <>
       {levelFlash && (
@@ -518,7 +568,7 @@ export default function QuestsPage({ user, missions }: { user: User; missions: M
                style={{ background: "rgba(0,229,255,0.02)" }}>
             {system.filter(m => m.category !== "prayer").map(m => (
               <MissionCard key={m.id} mission={m} userId={user.id} isPending={isPending}
-                onComplete={handleComplete} onReset={handleReset} onDelete={handleDelete} />
+                onComplete={handleComplete} onReset={handleReset} onDelete={handleDelete} onExtend={handleExtend} />
             ))}
           </div>
         </section>
@@ -554,7 +604,7 @@ export default function QuestsPage({ user, missions }: { user: User; missions: M
             ) : (
               custom.map(m => (
                 <MissionCard key={m.id} mission={m} userId={user.id} isPending={isPending}
-                  onComplete={handleComplete} onReset={handleReset} onDelete={handleDelete} />
+                  onComplete={handleComplete} onReset={handleReset} onDelete={handleDelete} onExtend={handleExtend} />
               ))
             )}
           </div>

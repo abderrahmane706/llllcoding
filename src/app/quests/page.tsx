@@ -17,6 +17,7 @@ export default async function QuestsRoute() {
         id: m.id, title: m.title, description: m.description,
         expReward: m.expReward, status: m.status, type: m.type,
         category: m.category, prayerIndex: m.prayerIndex,
+        expiresAt: m.expiresAt, isCustom: m.isCustom,
       }))}
     />
   );

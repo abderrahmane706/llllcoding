@@ -43,7 +43,7 @@ export async function completeMission(missionId: string) {
 
   await db.user.update({
     where: { id: userId },
-    data: { totalExp: newExp, level: newLevel, rank: newRank },
+    data: { totalExp: newExp, level: newLevel, rank: newRank, tasksCompleted: user.tasksCompleted + 1 },
   });
 
   // Log EXP gain
@@ -87,8 +87,9 @@ export async function addMission(formData: FormData) {
     expReward: formData.get("expReward"),
   });
   if (!parsed.success) throw new Error("Invalid input");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Default 24h
   await db.mission.create({
-    data: { ...parsed.data, userId, type: MissionType.USER_GENERATED, category: "custom" },
+    data: { ...parsed.data, userId, type: MissionType.USER_GENERATED, category: "custom", isCustom: true, expiresAt },
   });
   revalidatePath("/"); revalidatePath("/quests");
 }
@@ -99,6 +100,22 @@ export async function deleteMission(missionId: string) {
   const mission = await db.mission.findUnique({ where: { id: missionId } });
   if (!mission || mission.userId !== userId) throw new Error("Not found or unauthorized");
   await db.mission.delete({ where: { id: missionId } });
+  revalidatePath("/"); revalidatePath("/quests");
+}
+
+// ── Extend a mission's time ──────────────────────────────────────────────────
+export async function extendMission(missionId: string, hoursToAdd: number) {
+  const userId = await requireAuth();
+  const mission = await db.mission.findUnique({ where: { id: missionId } });
+  if (!mission || mission.userId !== userId) throw new Error("Not found or unauthorized");
+  if (!mission.isCustom || !mission.expiresAt) throw new Error("Cannot extend standard tasks or tasks without expiry");
+  
+  const newExpiry = new Date(mission.expiresAt.getTime() + hoursToAdd * 60 * 60 * 1000);
+  await db.mission.update({
+    where: { id: missionId },
+    data: { expiresAt: newExpiry },
+  });
+  
   revalidatePath("/"); revalidatePath("/quests");
 }
 

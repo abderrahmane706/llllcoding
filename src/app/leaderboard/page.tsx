@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { RANK_THRESHOLDS } from "@/lib/ranks";
+import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -16,14 +17,15 @@ export const metadata: Metadata = {
 async function getLeaderboard() {
   return db.user.findMany({
     select: {
-      id: true,        // needed for React keys only, not rendered
+      id: true,
       name: true,
       level: true,
       rank: true,
       totalExp: true,
-      // NOT selected: email, password, createdAt, updatedAt, missions, progress
+      tasksCompleted: true,
+      avatarUrl: true,
     },
-    orderBy: [{ level: "desc" }, { totalExp: "desc" }],
+    orderBy: [{ tasksCompleted: "desc" }, { totalExp: "desc" }],
     take: 50,
   });
 }
@@ -34,20 +36,24 @@ function getRankColor(rank: string): string {
 }
 
 // ── Rank badge ─────────────────────────────────────────────────────────────────
-function RankBadge({ rank }: { rank: string }) {
+function RankBadge({ rank, avatarUrl, name }: { rank: string; avatarUrl: string | null; name: string | null }) {
   const color = getRankColor(rank);
+  const initials = (name ?? "H").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   return (
     <div
-      className="w-10 h-10 rounded font-black font-orbitron text-sm flex items-center justify-center border-2 shrink-0"
+      className="w-10 h-10 rounded font-black font-orbitron text-sm flex items-center justify-center border-2 shrink-0 overflow-hidden relative bg-black/80"
       style={{
         color,
         borderColor: color,
-        background: `${color}15`,
         boxShadow: `0 0 10px ${color}40`,
         textShadow: `0 0 8px ${color}`,
       }}
     >
-      {rank}
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+      ) : (
+        <span>{initials}</span>
+      )}
     </div>
   );
 }
@@ -86,6 +92,9 @@ function ExpBar({ totalExp, rank }: { totalExp: number; rank: string }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default async function LeaderboardPage() {
   const players = await getLeaderboard();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id;
 
   return (
     <div className="min-h-screen px-4 py-6 max-w-2xl mx-auto space-y-6">
@@ -132,10 +141,16 @@ export default async function LeaderboardPage() {
                 <div
                   key={player.id}
                   className={`group grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_1fr_80px_auto] gap-4 items-center px-4 py-3.5 transition-colors duration-200 ${
-                    isTop3 ? "bg-yellow-500/03 hover:bg-yellow-500/06" : "hover:bg-white/02"
+                    player.id === currentUserId
+                      ? "bg-cyan-900/30 hover:bg-cyan-900/40"
+                      : isTop3
+                      ? "bg-yellow-500/03 hover:bg-yellow-500/06"
+                      : "hover:bg-white/02"
                   }`}
                   style={
-                    isTop3
+                    player.id === currentUserId
+                      ? { borderLeft: "2px solid #00e5ff" }
+                      : isTop3
                       ? { borderLeft: `2px solid ${pos === 1 ? "#ffd700" : pos === 2 ? "#c0c0c0" : "#cd7f32"}` }
                       : { borderLeft: "2px solid transparent" }
                   }
@@ -147,15 +162,20 @@ export default async function LeaderboardPage() {
 
                   {/* Name + rank badge */}
                   <div className="flex items-center gap-3 min-w-0">
-                    <RankBadge rank={player.rank} />
+                    <RankBadge rank={player.rank} avatarUrl={player.avatarUrl} name={player.name} />
                     <div className="min-w-0">
-                      <p className={`font-bold text-sm truncate ${
-                        pos === 1 ? "text-yellow-400" : pos <= 3 ? "text-gray-200" : "text-gray-400"
+                      <p className={`font-bold text-sm truncate flex items-center gap-2 ${
+                        player.id === currentUserId
+                          ? "text-neon-blue"
+                          : pos === 1 ? "text-yellow-400" : pos <= 3 ? "text-gray-200" : "text-gray-400"
                       }`}>
                         {player.name ?? "Unknown Hunter"}
+                        {player.id === currentUserId && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border border-neon-blue/30 bg-neon-blue/10 uppercase tracking-widest text-neon-blue">You</span>
+                        )}
                       </p>
                       <p className="text-[10px] text-gray-600 font-orbitron">
-                        {player.totalExp.toLocaleString()} EXP
+                        {player.tasksCompleted.toLocaleString()} TASKS • {player.totalExp.toLocaleString()} EXP
                       </p>
                     </div>
                   </div>

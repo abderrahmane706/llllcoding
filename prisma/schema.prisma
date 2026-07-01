@@ -29,6 +29,7 @@ model User {
   bio              String?
   avatarUrl        String?
   totalExp         Int       @default(0)
+  tasksCompleted   Int       @default(0)
   level            Int       @default(1)
   rank             Rank      @default(F)
   lastDailyReset   DateTime?
@@ -61,6 +62,8 @@ model Mission {
   status      MissionStatus @default(PENDING)
   category    String?       @default("general")
   prayerIndex Int?
+  isCustom    Boolean       @default(false)
+  expiresAt   DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
