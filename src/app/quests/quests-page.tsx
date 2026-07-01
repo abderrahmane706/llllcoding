@@ -11,10 +11,50 @@ type Mission = {
   expReward: number; status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   type: "STANDARD" | "USER_GENERATED";
   category: string | null; prayerIndex: number | null;
-  expiresAt: Date | null; isCustom: boolean;
+  expiresAt: Date | null; isCustom: boolean | null;
+  createdAt: Date | string | null;
 };
 
 type User = { id: string; name: string | null; level: number; rank: string; totalExp: number };
+
+// ── Safe Time Left Calculation Utility ─────────────────────────────────────────
+function getTimeLeft(
+  expiry: Date | string | null,
+  createdAt: Date | string | null
+): { text: string; urgent: boolean } {
+  try {
+    let expiryTime = 0;
+    if (expiry) {
+      const parsed = new Date(expiry).getTime();
+      if (!isNaN(parsed)) {
+        expiryTime = parsed;
+      }
+    }
+    
+    if (expiryTime === 0 && createdAt) {
+      const parsedCreated = new Date(createdAt).getTime();
+      if (!isNaN(parsedCreated)) {
+        expiryTime = parsedCreated + 24 * 60 * 60 * 1000;
+      }
+    }
+
+    if (expiryTime === 0) {
+      expiryTime = Date.now() + 24 * 60 * 60 * 1000;
+    }
+
+    const diff = expiryTime - Date.now();
+    if (diff <= 0) {
+      return { text: "00h 00m 00s (Expired)", urgent: true };
+    }
+
+    const h = Math.floor(diff / (1000 * 60 * 60));
+    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((diff % (1000 * 60)) / 1000);
+    return { text: `${h}h ${m}m ${s}s`, urgent: h < 6 };
+  } catch (e) {
+    return { text: "23h left", urgent: false };
+  }
+}
 
 // ── Particle burst on complete ────────────────────────────────────────────────
 function useParticleBurst() {
@@ -54,32 +94,24 @@ function MissionCard({
   const { ref, burst } = useParticleBurst();
   const [justCompleted, setJustCompleted] = useState(false);
   const isCompleted = mission.status === "COMPLETED";
-  const isCustom    = mission.isCustom || mission.type === "USER_GENERATED";
+  const isCustom    = (mission.isCustom ?? false) || mission.type === "USER_GENERATED";
 
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [isUrgent, setIsUrgent] = useState(false);
 
   useEffect(() => {
-    if (!mission.expiresAt || isCompleted) return;
-    const expiry = new Date(mission.expiresAt).getTime();
+    if (isCompleted) return;
     
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const diff = expiry - now;
-      if (diff <= 0) {
-        setTimeLeft("00h 00m 00s (Expired)");
-        setIsUrgent(true);
-        clearInterval(interval);
-      } else {
-        const h = Math.floor(diff / (1000 * 60 * 60));
-        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((diff % (1000 * 60)) / 1000);
-        setTimeLeft(`${h}h ${m}m ${s}s`);
-        setIsUrgent(h < 6); // Urgent if less than 6 hours
-      }
-    }, 1000);
+    const updateTimer = () => {
+      const { text, urgent } = getTimeLeft(mission.expiresAt, mission.createdAt);
+      setTimeLeft(text);
+      setIsUrgent(urgent);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [mission.expiresAt, isCompleted]);
+  }, [mission.expiresAt, mission.createdAt, isCompleted]);
 
   function handleComplete() {
     burst();

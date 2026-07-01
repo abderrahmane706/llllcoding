@@ -19,6 +19,7 @@ export default async function QuestsRoute() {
         expReward: m.expReward, status: m.status, type: m.type,
         category: m.category, prayerIndex: m.prayerIndex,
         expiresAt: m.expiresAt, isCustom: m.isCustom,
+        createdAt: m.createdAt,
       }))}
     />
   );
