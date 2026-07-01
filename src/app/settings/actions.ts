@@ -28,7 +28,7 @@ export async function updateProfile(formData: FormData) {
     bio:  formData.get("bio") || undefined,
   });
   if (!parsed.success) {
-    throw new Error(parsed.error.errors[0]?.message ?? "Invalid input");
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
   await db.user.update({
