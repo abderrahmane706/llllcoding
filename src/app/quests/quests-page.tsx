@@ -179,7 +179,6 @@ function MissionCard({
               Done
             </button>
           )}
-          )}
 
           {isCustom && !isCompleted && onExtend && (
             <button
