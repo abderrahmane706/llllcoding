@@ -2,6 +2,7 @@ import { getPlayerProfile } from "@/lib/data";
 import QuestsPage from "./quests-page";
 import type { Metadata } from "next";
 
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: "System Quests — Shinka Track",
   description: "Complete your daily Shinka System missions to earn EXP.",

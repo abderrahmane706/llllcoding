@@ -175,7 +175,7 @@ export default async function LeaderboardPage() {
                         )}
                       </p>
                       <p className="text-[10px] text-gray-600 font-orbitron">
-                        {player.tasksCompleted.toLocaleString()} TASKS • {player.totalExp.toLocaleString()} EXP
+                        {(player.tasksCompleted ?? 0).toLocaleString()} TASKS • {(player.totalExp ?? 0).toLocaleString()} EXP
                       </p>
                     </div>
                   </div>
